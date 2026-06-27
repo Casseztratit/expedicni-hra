@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Týmů se startovními čísly</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: Arial, sans-serif; }
+        #map-container { width: 100%; height: 100%; }
+        #ovladaci-panel {
+            position: absolute; top: 10px; left: 10px; background: white; padding: 15px;
+            border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000;
+        }
+        button { padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; }
+        
+        /* VZHLED KULATÉHO ŠPENDLÍKU */
+        .tym-cislo-ikonka {
+            background-color: #d32f2f;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            width: 28px !important;
+            height: 28px !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ovladaci-panel">
+    <h3>GPS Mapa Týmů</h3>
+    <button onclick="nactiGpsDataAObnovMapu()">Aktualizovat polohu</button>
+</div>
+<div id="map-container"></div>
+
+<script>
+    // 1. ZDE VLOŽ SVŮJ CSV ODKAZ
+    const GPS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRajAt-WEl58HEkO8zIz_DK2QF7KzeBMHNpdkKvZX6cQYmPnnm4eIXy4-Ec0mEKtKq96aRJIwwW77XG/pub?gid=424447547&single=true&output=csv";
+
+    // 2. TVŮJ SEZNAM STARTOVNÍCH ČÍSEL
+    const startovniCisla = {
+        "hood celebrity": "1",
+        "slovenská strela": "2",
+        "bembelín": "3",
+        "posádka 4": "4",
+        "posádka 5": "5",
+        "posádka 6": "6",
+        "posádka 7": "7",
+        "posádka 8": "8",
+        "posádka 9": "9",
+        "posádka 10": "10",
+        // Sem stačí přidat další řádky: "jmeno_týmu": "číslo",
+    };
+
+    let mapa = L.map('map-container').setView([49.8, 15.0], 8);
+    let vrstvaZnacek = L.layerGroup().addTo(mapa);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(mapa);
+
+    // Funkce pro rozdělení CSV
+    function rozdelCsvRadek(radek) {
+        const vysledek = [];
+        let aktualni = '';
+        let uvnitrUvozovek = false;
+        for (let i = 0; i < radek.length; i++) {
+            if (radek[i] === '"') uvnitrUvozovek = !uvnitrUvozovek;
+            else if (radek[i] === ',' && !uvnitrUvozovek) { vysledek.push(aktualni); aktualni = ''; }
+            else { aktualni += radek[i]; }
+        }
+        vysledek.push(aktualni);
+        return vysledek;
+    }
+
+    function nactiGpsDataAObnovMapu() {
+        fetch(GPS_CSV_URL)
+            .then(response => response.text())
+            .then(csvText => {
+                vrstvaZnacek.clearLayers();
+                const radky = csvText.split("\n");
+                
+                // OBNOVENÝ FILTR: Sem si budeme ukládat jen ty nejnovější pozice
+                const posledniPolohy = {};
+
+                // Projdeme celou tabulku shora dolů
+                for (let i = 1; i < radky.length; i++) {
+                    if (!radky[i].trim()) continue;
+                    const bunky = rozdelCsvRadek(radky[i].trim());
+                    
+                    const cas = bunky[0] ? bunky[0].trim() : "";
+                    const tym = bunky[1] ? bunky[1].trim() : "";
+                    const lat = parseFloat(bunky[2] ? bunky[2].replace(',', '.') : "");
+                    const lon = parseFloat(bunky[3] ? bunky[3].replace(',', '.') : "");
+
+                    if (tym && !isNaN(lat) && !isNaN(lon)) {
+                        // Uložíme. Protože jdeme shora dolů, staré záznamy se přepíšou těmi novějšími.
+                        posledniPolohy[tym] = { lat: lat, lon: lon, cas: cas };
+                    }
+                }
+
+                const souradniceProZoom = [];
+
+                // Teď projdeme ty uložené (a vyfiltrované) pozice a vykreslíme je
+                for (const tym in posledniPolohy) {
+                    const info = posledniPolohy[tym];
+                    const tymKey = tym.toLowerCase();
+                    const cislo = startovniCisla[tymKey] || "?";
+
+                    const ikonka = L.divIcon({
+                        className: 'tym-cislo-ikonka',
+                        html: cislo,
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 14]
+                    });
+
+                    L.marker([info.lat, info.lon], { icon: ikonka })
+                     .bindPopup(`<b>Tým: ${tym.replace(/_/g, " ")}</b><br>Start. č.: ${cislo}<br>Čas: ${info.cas}`)
+                     .addTo(vrstvaZnacek);
+                    
+                    souradniceProZoom.push([info.lat, info.lon]);
+                }
+
+                if (souradniceProZoom.length > 0) mapa.fitBounds(souradniceProZoom, { padding: [50, 50] });
+            })
+            .catch(err => console.error("Chyba:", err));
+    }
+
+    nactiGpsDataAObnovMapu();
+</script>
+</body>
+</html>

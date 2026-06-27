@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Výsledky Expediční Hry</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 15px;
+            text-align: center;
+        }
+        .container {
+            max-width: 450px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+        h1 { color: #1a1a1a; margin-bottom: 5px; font-size: 24px; }
+        .status {
+            color: #666;
+            font-size: 14px;
+            font-style: italic;
+            margin-bottom: 25px;
+        }
+        
+        /* Styl pro tabulku výsledků */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: #ffffff;
+        }
+        th, td {
+            padding: 12px 10px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 16px;
+        }
+        th {
+            background-color: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+        }
+        
+        /* ZVÝRAZNĚNÍ AKTUÁLNÍHO TÝMU */
+        .aktualni-tym {
+            background-color: #e8f4fd !important; /* Jemná modrá */
+            font-weight: bold;
+            color: #0056b3;
+            border: 2px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 id="hlavicka">Načítání...</h1>
+    <p id="status" class="status">Zjišťuji vaši polohu a aktualizuji data...</p>
+    
+    <table id="tabulka-vysledku">
+        <thead>
+            <tr>
+                <th>Pořadí</th>
+                <th>Tým</th>
+                <th>Body</th>
+            </tr>
+        </thead>
+        <tbody id="vysledky-body">
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // 1. Nastavení adres (Doplň své funkční adresy)
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqOjPf-8lIvVqJ4xKCWKmz1WysqsP3NfjPRHuQOSHbjeIq39v4h7NZEu0jx_HFZ-1L/exec";
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRajAt-WEl58HEkO8zIz_DK2QF7KzeBMHNpdkKvZX6cQYmPnnm4eIXy4-Ec0mEKtKq96aRJIwwW77XG/pub?gid=280437236&single=true&output=csv";
+
+    // 2. Zjištění názvu týmu z URL (?tym=...)
+    const urlParams = new URLSearchParams(window.location.search);
+    const nazevTymu = urlParams.get('tym') || "Neznamy_Tym";
+    document.getElementById("hlavicka").innerText = "Tým: " + nazevTymu.replace(/_/g, " ");
+
+    // 3. Spuštění GPS s maximální přesností a následné načtení tabulky
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => { odesliPolohu(pos); nactiVysledky(); },
+            () => { chybyGps(); nactiVysledky(); }, // I při chybě GPS chceme načíst výsledky
+            { 
+                enableHighAccuracy: true, // VYNUTÍ SKUTEČNOU GPS (přesnost na metry)
+                timeout: 10000,           // Časový limit na zaměření (10 sekund)
+                maximumAge: 0             // Zakáže načítání staré polohy z mezipaměti
+            }
+        );
+    } else {
+        document.getElementById("status").innerText = "Prohlížeč nepodporuje GPS.";
+        nactiVysledky();
+    }
+
+    // 4. Odeslání polohy
+    function odesliPolohu(position) {
+        const data = { tym: nazevTymu, lat: position.coords.latitude, lon: position.coords.longitude };
+        fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    }
+
+    function chybyGps() {
+        document.getElementById("status").innerText = "Poloha neodeslána (povolte GPS). Načítám výsledky...";
+    }
+
+    // 5. Načtení a vykreslení tabulky výsledků
+    function nactiVysledky() {
+        fetch(CSV_URL)
+            .then(response => response.text())
+            .then(csvText => {
+                const řádky = csvText.split("\n");
+                let htmlRadek = "";
+
+                for (let i = 1; i < řádky.length; i++) {
+                    if (!řádky[i].trim()) continue; // Přeskočit prázdné řádky
+
+                    const bunky = řádky[i].split(/[;,]/);
+                    
+                    const poradi = bunky[0] ? bunky[0].trim() : "";
+                    const tym = bunky[1] ? bunky[1].trim() : "";
+                    const body = bunky[2] ? bunky[2].trim() : "";
+
+                    let trida = "";
+                    if (tym.toLowerCase() === nazevTymu.toLowerCase()) {
+                        trida = ' class="aktualni-tym"';
+                    }
+
+                    htmlRadek += `<tr${trida}>
+                        <td>${poradi}</td>
+                        <td>${tym}</td>
+                        <td>${body}</td>
+                    </tr>`;
+                }
+
+                document.getElementById("vysledky-body").innerHTML = htmlRadek;
+                if(document.getElementById("status").innerText.includes("Načítám")) {
+                    document.getElementById("status").innerText = "Výsledky aktualizovány.";
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById("status").innerText = "Chyba při stahování výsledků.";
+            });
+    }
+</script>
+
+</body>
+</html>
