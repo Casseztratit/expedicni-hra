@@ -28,7 +28,7 @@
             margin-bottom: 25px;
         }
         
-        /* Styl pro tabulku výsledků */
+        /* Tabulka výsledků */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -36,23 +36,116 @@
             background: #ffffff;
         }
         th, td {
-            padding: 12px 10px;
+            padding: 12px 8px;
             text-align: center;
             border-bottom: 1px solid #e0e0e0;
             font-size: 16px;
+            vertical-align: middle;
         }
         th {
             background-color: #f8f9fa;
             color: #495057;
             font-weight: 600;
         }
-        
-        /* ZVÝRAZNĚNÍ AKTUÁLNÍHO TÝMU */
+
+        /* NÁZEV TÝMU A TLAČÍTKO VEDLE */
+        .tym-bunka {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .nazev-text {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* Malé kulaté tlačítko pro detail */
+        .btn-info {
+            background-color: #e7f1ff;
+            color: #007bff;
+            border: 1px solid #cce5ff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .tym-bunka:hover .btn-info {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        /* Zvýraznění aktuálního týmu */
         .aktualni-tym {
             background-color: #e8f4fd !important;
-            font-weight: bold;
-            color: #0056b3;
             border: 2px solid #007bff;
+        }
+        .aktualni-tym .nazev-text {
+            color: #0056b3;
+        }
+
+        /* STYLY PRO POP-UP (MODÁLNÍ OKNO) */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-obsah {
+            background: white;
+            padding: 20px 25px;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 320px;
+            text-align: left;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        .modal-nadpis {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        .modal-row {
+            margin-bottom: 10px;
+            font-size: 15px;
+            color: #333;
+        }
+        .modal-tlacitko {
+            margin-top: 20px;
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-tlacitko:active {
+            background-color: #0056b3;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
@@ -75,6 +168,16 @@
     </table>
 </div>
 
+<!-- POP-UP OKNO PRO DETAIL TÝMU -->
+<div id="modal-profil" class="modal-overlay" onclick="zavriProfil()">
+    <div class="modal-obsah" onclick="event.stopPropagation()">
+        <div id="modal-nazev" class="modal-nadpis">Název týmu</div>
+        <div class="modal-row"><strong>Startovní číslo:</strong> <span id="modal-cislo"></span></div>
+        <div class="modal-row"><strong>Posádka:</strong> <br><span id="modal-posadka"></span></div>
+        <button class="modal-tlacitko" onclick="zavriProfil()">Zavřít</button>
+    </div>
+</div>
+
 <script>
     // 1. Nastavení adres
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqOjPf-8lIvVqJ4xKCWKmz1WysqsP3NfjPRHuQOSHbjeIq39v4h7NZEu0jx_HFZ-1L/exec";
@@ -85,52 +188,43 @@
         "hood celebrity": "8735",
         "slovenská strela": "3446",
         "bembelín": "4924",
-        "six eyes two spies": "6930",
+        "six eyes two spies": "6390",
         "posádka 5": "4256",
         "posádka 6": "6124",
         "posádka 7": "2144",
         "posádka 8": "7071",
         "posádka 9": "3845",
-        "posádka 10": "5432",
-        // Zde doplň další týmy a jejich PINy (jména piš malými písmeny)
+        "posádka 10": "5432"
     };
 
     const urlParams = new URLSearchParams(window.location.search);
     const rawTym = urlParams.get('tym') || "";
 
-    // Rozdělení na jméno a PIN (např. "Bobr-1234")
     const casti = rawTym.split("-");
     const zadanyTym = casti[0] ? casti[0].trim() : "";
     const zadanyPin = casti[1] ? casti[1].trim() : "";
     const tymKlic = zadanyTym.toLowerCase();
 
-    // Kontrola platnosti
     if (!pinyTymu[tymKlic] || pinyTymu[tymKlic] !== zadanyPin) {
         document.body.innerHTML = "<div style='display:flex; justify-content:center; align-items:center; height:100vh; font-family:Arial; background-color:#f8d7da; color:#721c24; font-size:20px; font-weight:bold; text-align:center; padding:20px;'>Neplatný QR kód nebo špatný PIN týmu!</div>";
         throw new Error("Neplatný přístupový PIN.");
     }
 
-    // Uložení čistého názvu týmu pro odesílání GPS a tabulku výsledků
     const nazevTymu = zadanyTym;
     document.getElementById("hlavicka").innerText = "Tým: " + nazevTymu.replace(/_/g, " ");
 
-    // 3. Spuštění GPS s maximální přesností a následné načtení tabulky
+    // 3. Spuštění GPS s maximální přesností
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { odesliPolohu(pos); nactiVysledky(); },
             () => { chybyGps(); nactiVysledky(); }, 
-            { 
-                enableHighAccuracy: true, 
-                timeout: 10000,           
-                maximumAge: 0             
-            }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     } else {
         document.getElementById("status").innerText = "Prohlížeč nepodporuje GPS.";
         nactiVysledky();
     }
 
-    // 4. Odeslání polohy
     function odesliPolohu(position) {
         const data = { tym: nazevTymu, lat: position.coords.latitude, lon: position.coords.longitude };
         fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -140,7 +234,7 @@
         document.getElementById("status").innerText = "Poloha neodeslána (povolte GPS). Načítám výsledky...";
     }
 
-    // 5. Načtení a vykreslení tabulky výsledků
+    // 4. Načtení a vykreslení tabulky výsledků
     function nactiVysledky() {
         fetch(CSV_URL)
             .then(response => response.text())
@@ -151,21 +245,33 @@
                 for (let i = 1; i < řádky.length; i++) {
                     if (!řádky[i].trim()) continue; 
 
-                    const bunky = řádky[i].split(/[;,]/);
+                    const bunky = parsujCsvRadek(řádky[i]);
                     
-                    const poradi = bunky[0] ? bunky[0].trim() : "";
+                    let poradi = bunky[0] ? bunky[0].trim() : "";
+                    if (!poradi.endsWith(".") && poradi !== "") {
+                        poradi += ".";
+                    }
+
                     const tym = bunky[1] ? bunky[1].trim() : "";
                     const body = bunky[2] ? bunky[2].trim() : "";
+                    const cisloTymu = bunky[3] ? bunky[3].trim() : "—";
+                    const posadka = bunky[4] ? bunky[4].trim() : "Neuvedeno";
 
                     let trida = "";
                     if (tym.toLowerCase() === nazevTymu.toLowerCase()) {
                         trida = ' class="aktualni-tym"';
                     }
 
+                    // Vykreslení názvu s novým tlačítkem ikony 🔎
                     htmlRadek += `<tr${trida}>
                         <td>${poradi}</td>
-                        <td>${tym}</td>
-                        <td>${body}</td>
+                        <td>
+                            <div class="tym-bunka" onclick="otevriProfil('${escapeHtml(tym)}', '${escapeHtml(cisloTymu)}', '${escapeHtml(posadka)}')">
+                                <span class="nazev-text">${tym}</span>
+                                <span class="btn-info">🔎</span>
+                            </div>
+                        </td>
+                        <td><strong>${body}</strong></td>
                     </tr>`;
                 }
 
@@ -178,6 +284,47 @@
                 console.error(err);
                 document.getElementById("status").innerText = "Chyba při stahování výsledků.";
             });
+    }
+
+    // 5. Pomocná funkce pro správné rozdělení CSV
+    function parsujCsvRadek(radek) {
+        const pouzivaStrednik = radek.includes(';');
+        const oddelovac = pouzivaStrednik ? ';' : ',';
+        
+        const vysledek = [];
+        let uvnitrUvozovek = false;
+        let aktualniBunka = '';
+
+        for (let i = 0; i < radek.length; i++) {
+            const znak = radek[i];
+            
+            if (znak === '"' || znak === "'") {
+                uvnitrUvozovek = !uvnitrUvozovek;
+            } else if (znak === oddelovac && !uvnitrUvozovek) {
+                vysledek.push(aktualniBunka.trim().replace(/^["']|["']$/g, ''));
+                aktualniBunka = '';
+            } else {
+                aktualniBunka += znak;
+            }
+        }
+        vysledek.push(aktualniBunka.trim().replace(/^["']|["']$/g, ''));
+        return vysledek;
+    }
+
+    // 6. Funkce pro ovládání Pop-up okna
+    function otevriProfil(nazev, cislo, posadka) {
+        document.getElementById("modal-nazev").innerText = nazev;
+        document.getElementById("modal-cislo").innerText = "#" + cislo;
+        document.getElementById("modal-posadka").innerText = posadka;
+        document.getElementById("modal-profil").style.display = "flex";
+    }
+
+    function zavriProfil() {
+        document.getElementById("modal-profil").style.display = "none";
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/'/g, "\\'").replace(/"/g, "&quot;");
     }
 </script>
 
