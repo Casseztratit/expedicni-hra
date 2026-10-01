@@ -183,7 +183,7 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqOjPf-8lIvVqJ4xKCWKmz1WysqsP3NfjPRHuQOSHbjeIq39v4h7NZEu0jx_HFZ-1L/exec";
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRajAt-WEl58HEkO8zIz_DK2QF7KzeBMHNpdkKvZX6cQYmPnnm4eIXy4-Ec0mEKtKq96aRJIwwW77XG/pub?gid=280437236&single=true&output=csv";
 
-   // 2. BEZPEČNOSTNÍ BLOK & KONTROLA ADMINA
+    // 2. BEZPEČNOSTNÍ BLOK & KONTROLA ADMINA
     const urlParams = new URLSearchParams(window.location.search);
     const isAdmin = urlParams.has('takytochcividet2486');
 
@@ -234,15 +234,16 @@
         nazevTymu = zadanyTym;
         document.getElementById("hlavicka").innerText = "Tým: " + nazevTymu.replace(/_/g, " ");
 
-        // 3. ŘÍZENÍ GPS A NAČTENÍ VÝSLEDKŮ (Tvoje původní spolehlivá logika)
+        // 3. ŘÍZENÍ GPS A NAČTENÍ VÝSLEDKŮ
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => { 
-                    odesliPolohu(pos); // Nejdřív odešle polohu
+                    odesliPolohu(pos); // Odeslání polohy nyní bezpečně proběhne
                     nactiVysledky();   // Pak načte tabulku
                 },
                 (err) => { 
-                    nactiVysledky();   // Načte tabulku i kdyby tým zamítl GPS (tvoje původní chování)
+                    console.warn("GPS zamítnuto nebo nedostupné.");
+                    nactiVysledky();   // Načte tabulku i kdyby tým zamítl GPS
                 }, 
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
@@ -251,8 +252,27 @@
         }
     }
 
+    // 3.1 CHYBĚJÍCÍ FUNKCE PRO ODESLÁNÍ POLOHY (DOPLNĚNO)
+    function odesliPolohu(pos) {
+        try {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            
+            // Odeslání dat jako GET parametrů na tvůj Google Apps Script
+            const url = `${SCRIPT_URL}?tym=${encodeURIComponent(nazevTymu)}&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+            
+            fetch(url, { mode: 'no-cors' })
+                .then(() => console.log("Poloha odeslána na server."))
+                .catch(err => console.error("Chyba při odesílání polohy:", err));
+        } catch (error) {
+            console.error("Došlo k chybě ve funkci odesliPolohu:", error);
+        }
+    }
+
     // 4. Načtení a vykreslení tabulky výsledků
     function nactiVysledky() {
+        document.getElementById("status").innerText = "Načítám výsledky z tabulky...";
+        
         fetch(CSV_URL)
             .then(response => response.text())
             .then(csvText => {
