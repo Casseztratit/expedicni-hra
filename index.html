@@ -183,61 +183,70 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqOjPf-8lIvVqJ4xKCWKmz1WysqsP3NfjPRHuQOSHbjeIq39v4h7NZEu0jx_HFZ-1L/exec";
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRajAt-WEl58HEkO8zIz_DK2QF7KzeBMHNpdkKvZX6cQYmPnnm4eIXy4-Ec0mEKtKq96aRJIwwW77XG/pub?gid=280437236&single=true&output=csv";
 
-    // 2. BEZPEČNOSTNÍ BLOK & KONTROLA ADMINA
+   // 2. BEZPEČNOSTNÍ BLOK & KONTROLA ADMINA
     const urlParams = new URLSearchParams(window.location.search);
-    const isAdmin = urlParams.get('takytochcividet2486') === '1'; // Speciální odkaz pro organizátora (?admin=1)
+    const isAdmin = urlParams.has('takytochcividet2486');
 
-    const pinyTymu = {
-        "hood celebrity": "8735",
-        "slovenská strela": "3446",
-        "bembelín": "4924",
-        "six eyes two spies": "6390",
-        "ztraceni v první zatáčce": "4256",
-        "posádka 6": "6124",
-        "posádka 7": "2144",
-        "posádka 8": "7071",
-        "posádka 9": "3845",
-        "posádka 10": "5432"
-    };
-
-    let nazevTymu = "";
+    // Proměnná nazevTymu MUSÍ být založená tady nahoře, aby ji funkce pro odeslání GPS viděla
+    let nazevTymu = ""; 
 
     if (isAdmin) {
-        // REŽIM ORGANIZÁTORA: Přeskočí se PIN i zvýrazňování týmu
+        // ==========================================
+        // VĚTEV A: ORGANIZÁTOR (Žádná GPS, jen data)
+        // ==========================================
         nazevTymu = "Organizátor";
         document.getElementById("hlavicka").innerText = "Přehled výsledků (Organizátor)";
+        
+        // Načte výsledky ihned
+        nactiVysledky(); 
+
     } else {
-        // REŽIM HRÁČŮ: Kontrola PINu z QR kódu
+        // ==========================================
+        // VĚTEV B: TVŮJ PŮVODNÍ FUNKČNÍ KÓD PRO TÝMY
+        // ==========================================
         const rawTym = urlParams.get('tym') || "";
         const casti = rawTym.split("-");
         const zadanyTym = casti[0] ? casti[0].trim() : "";
         const zadanyPin = casti[1] ? casti[1].trim() : "";
+        
+        const pinyTymu = {
+            "hood celebrity": "8735",
+            "slovenská strela": "3446",
+            "bembelín": "4924",
+            "six eyes two spies": "6390",
+            "ztraceni v první zatáčce": "4256",
+            "posádka 5": "4256",
+            "posádka 6": "6124",
+            "posádka 7": "2144",
+            "posádka 8": "7071",
+            "posádka 9": "3845",
+            "posádka 10": "5432"
+        };
+
         const tymKlic = zadanyTym.toLowerCase();
 
+        // Ochrana PINu
         if (!pinyTymu[tymKlic] || pinyTymu[tymKlic] !== zadanyPin) {
-            document.body.innerHTML = "<div style='display:flex; justify-content:center; align-items:center; height:100vh; font-family:Arial; background-color:#f8d7da; color:#721c24; font-size:20px; font-weight:bold; text-align:center; padding:20px;'>Neplatný QR kód nebo špatný PIN týmu!</div>";
+            document.body.innerHTML = "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background-color:#f8d7da; color:#721c24; font-size:20px; font-weight:bold; text-align:center;'>Neplatný QR kód nebo špatný PIN týmu!</div>";
             throw new Error("Neplatný přístupový PIN.");
         }
 
         nazevTymu = zadanyTym;
         document.getElementById("hlavicka").innerText = "Tým: " + nazevTymu.replace(/_/g, " ");
-    }
 
-    // 3. ŘÍZENÍ GPS A NAČTENÍ VÝSLEDKŮ
-    if (isAdmin) {
-        // Organizátor: GPS se VŮBEC nespouští a neodesílá
-        document.getElementById("status").innerText = "Režim organizátora (GPS vypnuto)";
-        nactiVysledky();
-    } else {
-        // Hráči: Běžné měření GPS s odesláním polohy
+        // 3. ŘÍZENÍ GPS A NAČTENÍ VÝSLEDKŮ (Tvoje původní spolehlivá logika)
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (pos) => { odesliPolohu(pos); nactiVysledky(); },
-                () => { chybyGps(); nactiVysledky(); }, 
+                (pos) => { 
+                    odesliPolohu(pos); // Nejdřív odešle polohu
+                    nactiVysledky();   // Pak načte tabulku
+                },
+                (err) => { 
+                    nactiVysledky();   // Načte tabulku i kdyby tým zamítl GPS (tvoje původní chování)
+                }, 
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         } else {
-            document.getElementById("status").innerText = "Prohlížeč nepodporuje GPS.";
             nactiVysledky();
         }
     }
